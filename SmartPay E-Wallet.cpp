@@ -1,39 +1,36 @@
 #include <iostream>
 #include <string>
 #include <vector>
-#include <list>       // Linked List
-#include <stack>      // Stack
-#include <queue>      // Queue
-#include <map>        // Tree
-#include <unordered_map> // Graph
-#include <algorithm>  // Sorting
+#include <list>
+#include <stack>
+#include <queue>
+#include <map>
+#include <unordered_map>
+#include <algorithm>
 #include <iomanip>
 using namespace std;
 
-// Struktur Transaksi
 struct Transaksi {
     int id;
-    string jenis;     // Jenis transaksi: QRIS, Top Up, Transfer
+    string jenis;
     string merchant;
     double nominal;
 };
 
-// Struktur User (hanya satu akun)
 struct User {
     string id;
     string nama;
+    string password;
     double saldo;
     vector<Transaksi> transaksi;
 };
 
-// Pointer untuk tampilkan user
 void tampilkanUser(User* u) {
     cout << left << setw(10) << u->id
          << setw(20) << u->nama
          << "Rp" << u->saldo << endl;
 }
 
-// Searching transaksi
 void cariTransaksi(const vector<Transaksi>& arr, int id) {
     for (auto& t : arr) {
         if (t.id == id) {
@@ -47,37 +44,46 @@ void cariTransaksi(const vector<Transaksi>& arr, int id) {
     cout << "Transaksi tidak ditemukan.\n";
 }
 
-// Sorting transaksi berdasarkan nominal
 bool compareNominal(Transaksi a, Transaksi b) {
     return a.nominal < b.nominal;
 }
 
-// ===== MAIN PROGRAM =====
 int main() {
     cout << "=====================================\n";
     cout << "   SMARTPAY E-WALLET SYSTEM   \n";
     cout << "=====================================\n";
 
-    // Buat satu user saja
     User user;
     cout << "Masukkan ID User   : "; cin >> user.id;
     cout << "Masukkan Nama User : "; cin.ignore(); getline(cin, user.nama);
+    cout << "Masukkan Password  : "; cin >> user.password;
     cout << "Masukkan Saldo Awal: "; cin >> user.saldo;
 
-    list<Transaksi> riwayat;     // Linked List
-    stack<Transaksi> undoStack;  // Stack
-    queue<Transaksi> pendingQueue; // Queue
-    map<string, vector<string>> kategori; // Tree
-    unordered_map<string, vector<string>> merchantGraph; // Graph
+    // Login check
+    string inputPass;
+    cout << "Login - Masukkan Password: ";
+    cin >> inputPass;
+    if (inputPass != user.password) {
+        cout << "Password salah! Program berhenti.\n";
+        return 0;
+    }
 
-    // Isi Tree kategori
-    kategori["Makanan"] = {"Restoran", "Fast Food"};
-    kategori["Transportasi"] = {"Ojek Online", "Taksi"};
+    list<Transaksi> riwayat;     
+    stack<Transaksi> undoStack;  
+    queue<Transaksi> pendingQueue; 
 
-    // Isi Graph merchant-bank
-    merchantGraph["Bank A"] = {"Merchant1", "Merchant2"};
-    merchantGraph["Bank B"] = {"Merchant3", "Merchant4"};
+    map<string,string> merchantKategori;
+    merchantKategori["Burger"] = "Makanan";
+    merchantKategori["Kopi"] = "Minuman";
+    merchantKategori["Restoran"] = "Makanan";
+    merchantKategori["OjekOnline"] = "Transportasi";
+    merchantKategori["Taksi"] = "Transportasi";
 
+    map<string,int> kategoriCounter;
+    map<string,int> bankCounter;
+    map<pair<string,string>, int> bankKategoriCounter;
+
+    int autoID = 1234;
     int pilihan;
     do {
         cout << "\n=============================\n";
@@ -91,7 +97,7 @@ int main() {
         cout << "6. Undo Transaksi\n";
         cout << "7. Lihat Transaksi Pending\n";
         cout << "8. Lihat Tree Kategori\n";
-        cout << "9. Lihat Graph Merchant\n";
+        cout << "9. Lihat Graph Bank-Kategori\n";
         cout << "0. Keluar\n";
         cout << "Pilih menu: ";
         cin >> pilihan;
@@ -106,21 +112,46 @@ int main() {
         }
         else if (pilihan == 2) {
             Transaksi t;
-            cout << "ID Transaksi   : "; cin >> t.id;
+            t.id = autoID++;
+            cout << "ID Transaksi otomatis: " << t.id << endl;
             cout << "Jenis (QRIS/TopUp/Transfer): "; cin >> t.jenis;
             cout << "Nama Merchant  : "; cin >> t.merchant;
             cout << "Nominal        : "; cin >> t.nominal;
 
+            string bankUser;
+            cout << "Masukkan Bank User (Mandiri/BCA/BTN): ";
+            cin >> bankUser;
+
+            // Validasi password sebelum transaksi
+            string inputPassTrans;
+            cout << "Masukkan Password untuk konfirmasi transaksi: ";
+            cin >> inputPassTrans;
+            if (inputPassTrans != user.password) {
+                cout << "Password salah! Transaksi ditolak.\n";
+                continue;
+            }
+
+            string kategoriTransaksi = "Lainnya";
+            if (merchantKategori.find(t.merchant) != merchantKategori.end()) {
+                kategoriTransaksi = merchantKategori[t.merchant];
+            }
+
             if (t.nominal <= user.saldo || t.jenis == "TopUp") {
                 if (t.jenis == "TopUp") {
-                    user.saldo += t.nominal; // TopUp menambah saldo
+                    user.saldo += t.nominal;
                 } else {
-                    user.saldo -= t.nominal; // QRIS/Transfer mengurangi saldo
+                    user.saldo -= t.nominal;
                 }
                 user.transaksi.push_back(t);
                 riwayat.push_back(t);
                 undoStack.push(t);
+
+                kategoriCounter[kategoriTransaksi]++;
+                bankCounter[bankUser]++;
+                bankKategoriCounter[{bankUser, kategoriTransaksi}]++;
+
                 cout << "Transaksi berhasil! Saldo sekarang: Rp" << user.saldo << endl;
+                cout << bankUser << " digunakan di kategori " << kategoriTransaksi << endl;
             } else {
                 cout << "Saldo tidak cukup! Transaksi pending.\n";
                 pendingQueue.push(t);
@@ -156,27 +187,32 @@ int main() {
         }
         else if (pilihan == 7) {
             if (!pendingQueue.empty()) {
-                cout << "Transaksi pending: " << pendingQueue.front().jenis
-                     << " | " << pendingQueue.front().merchant
-                     << " - Rp" << pendingQueue.front().nominal << endl;
+                cout << "\n=== DAFTAR TRANSAKSI PENDING ===\n";
+                queue<Transaksi> temp = pendingQueue;
+                while (!temp.empty()) {
+                    Transaksi p = temp.front();
+                    cout << p.id << " | " << p.jenis 
+                         << " | " << p.merchant 
+                         << " - Rp" << p.nominal << endl;
+                    temp.pop();
+                }
             } else {
                 cout << "Tidak ada transaksi pending.\n";
             }
         }
         else if (pilihan == 8) {
-            cout << "\n=== TREE KATEGORI ===\n";
-            for (auto& k : kategori) {
-                cout << k.first << ": ";
-                for (auto& sub : k.second) cout << sub << " ";
-                cout << endl;
+            cout << "\n=== TREE KATEGORI (Ranking berdasarkan penggunaan) ===\n";
+            vector<pair<string,int>> ranking(kategoriCounter.begin(), kategoriCounter.end());
+            sort(ranking.begin(), ranking.end(), [](auto &a, auto &b){ return a.second > b.second; });
+            for (auto& r : ranking) {
+                cout << r.first << " digunakan " << r.second << " kali\n";
             }
         }
         else if (pilihan == 9) {
-            cout << "\n=== GRAPH MERCHANT ===\n";
-            for (auto& m : merchantGraph) {
-                cout << m.first << " terhubung ke: ";
-                for (auto& adj : m.second) cout << adj << " ";
-                cout << endl;
+            cout << "\n=== GRAPH BANK → KATEGORI (Penggunaan nyata) ===\n";
+            for (auto& bk : bankKategoriCounter) {
+                cout << bk.first.first << " digunakan di kategori "
+                     << bk.first.second << " sebanyak " << bk.second << " kali\n";
             }
         }
     } while (pilihan != 0);
